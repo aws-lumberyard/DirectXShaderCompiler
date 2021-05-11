@@ -55,6 +55,7 @@ struct SpirvCodeGenOptions {
   bool useGlLayout;
   bool useScalarLayout;
   bool flattenResourceArrays;
+  bool disableImageTypeDepthHint; // Amazon: Disable depth hint for OpTypeImage because some mobile drivers crash.
   bool autoShiftBindings;
   bool supportNonzeroBaseInstance;
   SpirvLayoutRule cBufferLayoutRule;
