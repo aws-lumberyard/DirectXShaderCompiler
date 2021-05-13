@@ -540,6 +540,10 @@ const SpirvType *LowerTypeVisitor::lowerResourceType(QualType type,
   { // Texture types
     spv::Dim dim = {};
     bool isArray = {};
+    // Disable depth hint because of driver issues
+    ImageType::WithDepth depth = spvOptions.disableImageTypeDepthHint
+                                     ? ImageType::WithDepth::No
+                                     : ImageType::WithDepth::Unknown;
     if ((dim = spv::Dim::Dim1D, isArray = false, name == "Texture1D") ||
         (dim = spv::Dim::Dim2D, isArray = false, name == "Texture2D") ||
         (dim = spv::Dim::Dim3D, isArray = false, name == "Texture3D") ||
@@ -575,7 +579,7 @@ const SpirvType *LowerTypeVisitor::lowerResourceType(QualType type,
       return spvContext.getImageType(
           lowerType(getElementType(astContext, sampledType), rule,
                     /*isRowMajor*/ llvm::None, srcLoc),
-          dim, ImageType::WithDepth::Unknown, isArray,
+          dim, depth, isArray,
           /*isMultiSampled=*/false, /*sampled=*/ImageType::WithSampler::No,
           format);
     }
