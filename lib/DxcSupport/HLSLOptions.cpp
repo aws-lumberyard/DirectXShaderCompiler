@@ -981,6 +981,7 @@ int ReadDxcOpts(const OptTable *optionTable, unsigned flagsToInclude,
       Args.hasFlag(OPT_fspv_reduce_load_size, OPT_INVALID, false);
   opts.SpirvOptions.fixFuncCallArguments =
       Args.hasFlag(OPT_fspv_fix_func_call_arguments, OPT_INVALID, false);
+  opts.SpirvOptions.disableImageTypeDepthHint = Args.hasFlag(OPT_fvk_disable_depth_hint, OPT_INVALID, false);
   opts.SpirvOptions.autoShiftBindings = Args.hasFlag(OPT_fvk_auto_shift_bindings, OPT_INVALID, false);
   opts.SpirvOptions.finiteMathOnly =
       Args.hasFlag(OPT_ffinite_math_only, OPT_fno_finite_math_only, false);

@@ -398,6 +398,8 @@ def fspv_preserve_interface : Flag<["-"], "fspv-preserve-interface">, Group<spir
   HelpText<"Preserves all interface variables in the entry point, even when those variables are unused">;
 def fvk_allow_rwstructuredbuffer_arrays: Flag<["-"], "fvk-allow-rwstructuredbuffer-arrays">, Group<spirv_Group>, Flags<[CoreOption, DriverOption, HelpHidden]>,
   HelpText<"Allow arrays of RWStructuredBuffers, AppendStructuredBuffers, and ConsumeStructuredBuffers. This is in development, and the option will be removed when the feature is complete.">;
+def fvk_disable_depth_hint: Flag<["-"], "fvk-disable-depth-hint">, Group<spirv_Group>, Flags<[CoreOption, DriverOption]>,
+  HelpText<"Disable the depth hint when generating OpTypeImage (driver issues)">;
 // SPIRV Change Ends
 
 //////////////////////////////////////////////////////////////////////////////
