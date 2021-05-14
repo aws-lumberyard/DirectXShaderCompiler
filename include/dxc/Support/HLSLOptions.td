@@ -336,6 +336,8 @@ def Wno_vk_emulated_features : Joined<["-"], "Wno-vk-emulated-features">, Group<
   HelpText<"Do not emit warnings for emulated features resulting from no direct mapping">;
 def Oconfig : CommaJoined<["-"], "Oconfig=">, Group<spirv_Group>, Flags<[CoreOption]>,
   HelpText<"Specify a comma-separated list of SPIRV-Tools passes to customize optimization configuration (see http://khr.io/hlsl2spirv#optimization)">;
+def fvk_disable_depth_hint: Flag<["-"], "fvk-disable-depth-hint">, Group<spirv_Group>, Flags<[CoreOption, DriverOption]>,
+  HelpText<"Disable the depth hint when generating OpTypeImage (driver issues)">;
 // SPIRV Change Ends
 
 //////////////////////////////////////////////////////////////////////////////
