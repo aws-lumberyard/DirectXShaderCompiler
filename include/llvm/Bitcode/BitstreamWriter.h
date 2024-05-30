@@ -21,6 +21,11 @@
 #include "llvm/Support/Endian.h"
 #include <vector>
 
+// O3DE change start
+#include "llvm/Bitcode/LLVMBitCodes.h"
+#include <functional>
+// O3DE change end
+
 namespace llvm {
 
 class BitstreamWriter {
@@ -88,6 +93,11 @@ class BitstreamWriter {
   }
 
 public:
+  // O3DE change start
+  typedef std::function<void(uint64_t, uint64_t)> ConstantHandlerFn;
+  ConstantHandlerFn WriteConstantCallback = nullptr;
+  // O3DE change end
+
   explicit BitstreamWriter(SmallVectorImpl<char> &O)
     : Out(O), CurBit(0), CurValue(0), CurCodeSize(2) {}
 
@@ -370,6 +380,22 @@ private:
           WriteByte(0);
       } else {  // Single scalar field.
         assert(RecordIdx < Vals.size() && "Invalid abbrev/record");
+        
+        // O3DE Change Start
+        if (WriteConstantCallback &&
+            Vals[0] == bitc::CST_CODE_INTEGER &&
+            Op.getEncoding() == BitCodeAbbrevOp::VBR) {
+          uint64_t SCBitOffset = (uint64_t)Out.size_in_bytes() * 8 + CurBit;
+          uint64_t SCVal = Vals[RecordIdx];
+          if (Vals[RecordIdx] & 1) {
+            SCVal = -(SCVal >> 1);
+          } else {
+            SCVal = SCVal >> 1;
+          }
+
+          WriteConstantCallback(SCVal, SCBitOffset);
+        }
+        // O3DE Change End
         EmitAbbreviatedField(Op, Vals[RecordIdx]);
         ++RecordIdx;
       }

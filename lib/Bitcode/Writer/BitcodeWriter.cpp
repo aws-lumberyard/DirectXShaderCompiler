@@ -2494,7 +2494,8 @@ static void EmitDarwinBCHeaderAndTrailer(SmallVectorImpl<char> &Buffer,
 /// WriteBitcodeToFile - Write the specified module to the specified output
 /// stream.
 void llvm::WriteBitcodeToFile(const Module *M, raw_ostream &Out,
-                              bool ShouldPreserveUseListOrder) {
+                              bool ShouldPreserveUseListOrder,
+                              BitstreamWriter::ConstantHandlerFn WriteCallback) { // O3DE change
   SmallVector<char, 0> Buffer;
   Buffer.reserve(256*1024);
 
@@ -2507,6 +2508,9 @@ void llvm::WriteBitcodeToFile(const Module *M, raw_ostream &Out,
   // Emit the module into the buffer.
   {
     BitstreamWriter Stream(Buffer);
+    // O3DE change start
+    Stream.WriteConstantCallback = WriteCallback;
+    // O3DE change end
 
     // Emit the file header.
     Stream.Emit((unsigned)'B', 8);
