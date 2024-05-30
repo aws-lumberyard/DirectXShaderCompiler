@@ -18,11 +18,13 @@
 #include "llvm/Support/Endian.h"
 #include "llvm/Support/ErrorOr.h"
 #include "llvm/Support/MemoryBuffer.h"
+// O3DE change start
+#include "llvm/Bitcode/BitstreamWriter.h"
+// O3DE change end
 #include <memory>
 #include <string>
 
 namespace llvm {
-  class BitstreamWriter;
   class DataStreamer;
   class LLVMContext;
   class Module;
@@ -69,7 +71,8 @@ namespace llvm {
   /// Value in \c M.  These will be reconstructed exactly when \a M is
   /// deserialized.
   void WriteBitcodeToFile(const Module *M, raw_ostream &Out,
-                          bool ShouldPreserveUseListOrder = false);
+                          bool ShouldPreserveUseListOrder = false,
+                          BitstreamWriter::ConstantHandlerFn WriteCallback = nullptr); // O3DE change
 
   /// isBitcodeWrapper - Return true if the given bytes are the magic bytes
   /// for an LLVM IR bitcode wrapper.
