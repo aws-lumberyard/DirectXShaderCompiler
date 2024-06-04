@@ -1,13 +1,11 @@
-///////////////////////////////////////////////////////////////////////////////
-//                                                                           //
-// dxa.cpp                                                                   //
-// Copyright (C) Microsoft Corporation. All rights reserved.                 //
-// This file is distributed under the University of Illinois Open Source     //
-// License. See LICENSE.TXT for details.                                     //
-//                                                                           //
-// Provides the entry point for the dxa console program.                     //
-//                                                                           //
-///////////////////////////////////////////////////////////////////////////////
+/*
+ * Copyright (c) Contributors to the Open 3D Engine Project.
+ * For complete copyright and license terms please see the LICENSE at the root
+ * of this distribution.
+ *
+ * SPDX-License-Identifier: Apache-2.0 OR MIT
+ *
+ */
 
 #include "dxc/Support/Global.h"
 #include "dxc/Support/Unicode.h"
@@ -52,11 +50,11 @@ static cl::opt<std::string> InputFilename(cl::Positional,
                                           cl::desc("<<input dxil file>>"));
 
 static cl::opt<std::string> OutputFilename("o",
-                                           cl::desc("Override output filename"),
+                                           cl::desc("Output filename"),
                                            cl::value_desc("filename"));
 
 static cl::opt<std::string> OffsetsFilename("f",
-                                           cl::desc("Offset filename"),
+                                           cl::desc("Json offsets filename"),
                                            cl::value_desc("filename"));
 
 static cl::opt<int> SentinelValue("sv",
@@ -67,107 +65,7 @@ constexpr uint64_t SentinelIdMask = 0x00000000000000ff;
 
 using namespace hlsl::options;
 
-std::string BlobToUtf8(_In_ IDxcBlob *pBlob) {
-  if (!pBlob)
-    return std::string();
-  CComPtr<IDxcBlobUtf8> pBlobUtf8;
-  if (SUCCEEDED(pBlob->QueryInterface(&pBlobUtf8)))
-    return std::string(pBlobUtf8->GetStringPointer(),
-                       pBlobUtf8->GetStringLength());
-  CComPtr<IDxcBlobEncoding> pBlobEncoding;
-  IFT(pBlob->QueryInterface(&pBlobEncoding));
-  // if (FAILED(pBlob->QueryInterface(&pBlobEncoding))) {
-  //   // Assume it is already UTF-8
-  //   return std::string((const char*)pBlob->GetBufferPointer(),
-  //                      pBlob->GetBufferSize());
-  // }
-  BOOL known;
-  UINT32 codePage;
-  IFT(pBlobEncoding->GetEncoding(&known, &codePage));
-  if (!known) {
-    throw std::runtime_error("unknown codepage for blob.");
-  }
-  std::string result;
-  if (codePage == DXC_CP_WIDE) {
-    const wchar_t *text = (const wchar_t *)pBlob->GetBufferPointer();
-    size_t length = pBlob->GetBufferSize() / 2;
-    if (length >= 1 && text[length - 1] == L'\0')
-      length -= 1; // Exclude null-terminator
-    Unicode::WideToUTF8String(text, length, &result);
-    return result;
-  } else if (codePage == CP_UTF8) {
-    const char *text = (const char *)pBlob->GetBufferPointer();
-    size_t length = pBlob->GetBufferSize();
-    if (length >= 1 && text[length - 1] == '\0')
-      length -= 1; // Exclude null-terminator
-    result.resize(length);
-    memcpy(&result[0], text, length);
-    return result;
-  } else {
-    throw std::runtime_error("Unsupported codepage.");
-  }
-}
-
-void PatchShader(uint32_t patch_val, uint64_t offset, uint8_t* byteCode) {
-  // For VBR encoding to encode the number of bits we expect (32), we need to
-  // set the MSB unconditionally. However, signed VBR moves the MSB to the LSB,
-  // so setting the MSB to 1 wouldn't help. Therefore, the bit we set to 1 is
-  // the one at index 30.
-  patch_val <<= 1; // What signed VBR does.
-
-  auto tamper_bits = [](uint8_t *p_start, uint64_t p_bit_offset,
-                        uint64_t p_tb_value) -> uint64_t {
-    uint64_t original = 0;
-    uint32_t curr_input_byte = p_bit_offset / 8;
-    uint8_t curr_input_bit = p_bit_offset % 8;
-    auto get_curr_input_bit = [&]() -> bool {
-      return ((p_start[curr_input_byte] >> curr_input_bit) & 1);
-    };
-    auto move_to_next_input_bit = [&]() {
-      if (curr_input_bit == 7) {
-        curr_input_bit = 0;
-        curr_input_byte++;
-      } else {
-        curr_input_bit++;
-      }
-    };
-    auto tamper_input_bit = [&](bool p_new_bit) {
-      p_start[curr_input_byte] &= ~((uint8_t)1 << curr_input_bit);
-      if (p_new_bit) {
-        p_start[curr_input_byte] |= (uint8_t)1 << curr_input_bit;
-      }
-    };
-    uint8_t value_bit_idx = 0;
-    for (uint32_t i = 0; i < 5; i++) { // 32 bits take 5 full bytes in VBR.
-      for (uint32_t j = 0; j < 7; j++) {
-        bool input_bit = get_curr_input_bit();
-        original |= (uint64_t)(input_bit ? 1 : 0) << value_bit_idx;
-        tamper_input_bit((p_tb_value >> value_bit_idx) & 1);
-        move_to_next_input_bit();
-        value_bit_idx++;
-      }
-      if (i < 4)
-          p_start[curr_input_byte] |= (uint8_t)1 << curr_input_bit;
-      move_to_next_input_bit();
-    }
-    return original;
-  };
-
-
-#ifdef DEV_ENABLED
-    uint64_t orig_patch_val = tamper_bits(bytecode.ptrw(), offset, patch_val);
-    // Checking against the value the NIR patch should have set.
-    DEV_ASSERT(!p_is_first_patch ||
-               ((orig_patch_val >> 1) & GODOT_NIR_SC_SENTINEL_MAGIC_MASK) ==
-                   GODOT_NIR_SC_SENTINEL_MAGIC);
-    uint64_t readback_patch_val =
-        tamper_bits(bytecode.ptrw(), offset, patch_val);
-    DEV_ASSERT(readback_patch_val == patch_val);
-#else
-    tamper_bits(byteCode, offset, patch_val);
-#endif
-}
-
+// Writes the offsets into a json file
 void WriteOffsetJsonFile(
     uint64_t dxilPartOffset, const std::map<uint32_t, uint64_t>& offsets) {
   std::stringstream stream;
@@ -190,15 +88,17 @@ void WriteOffsetJsonFile(
     IFT_Data(HRESULT_FROM_WIN32(GetLastError()), pFileName);
   }
 
-    DWORD written;
-
+  DWORD written;
   if (FALSE == WriteFile(file, jsonString.data(), (DWORD)jsonString.size(), &written, nullptr)) {
     IFT_Data(HRESULT_FROM_WIN32(GetLastError()), pFileName);
   }
 }
 
+// The DXSC application is used for patching a DXIL blob for use with specialization constants in O3DE.
+// It uses a sentinel value to detect the exact offset to each shader constant in the shader bytecode so
+// it can be patched at runtime. Based on Godot's approach https://godotengine.org/article/d3d12-adventures-in-shaderland/
 #ifdef _WIN32
-int __cdecl main(int argc, const char **argv) {
+int __cdecl wmain(int argc, const wchar_t **argv) {
 #else
 int main(int argc, const char **argv) {
 #endif
@@ -249,6 +149,7 @@ int main(int argc, const char **argv) {
     UINT32 partCount = 0;
     IFT(pReflection->GetPartCount(&partCount));
 
+    // Patch the LLVM IR.
     for (UINT32 i = 0; i < partCount; ++i) {
       CComPtr<IDxcBlob> pBitcode;
       IFT(pReflection->GetPartContent(i, &pBitcode));
@@ -259,6 +160,7 @@ int main(int argc, const char **argv) {
       UINT32 kind = 0;
       IFT(pReflection->GetPartKind(i, &kind));
 
+      // Find the DXIL container
       if (kind == hlsl::DFCC_DXIL) {
         const hlsl::DxilProgramHeader *dxilHeader =
             (const hlsl::DxilProgramHeader *)partStart;
@@ -278,7 +180,11 @@ int main(int argc, const char **argv) {
         llvm::Module &llvm_module = *bitcode_parsed->get();
         std::unordered_map<llvm::AllocaInst *, uint32_t> allocSCIndices;
 
-        // Find the specialization constants that are volatile variables
+        // Step 1:
+        // Make a database of the 'alloca's, based on the volatile stores.
+        // %63 = bitcast i32* %59 to i8*
+        // call void @llvm.lifetime.start(i64 4, i8* %63)
+        // store volatile i32 9, i32* %59, align 4      <---- Locate this
         for (llvm::Function &function : llvm_module.getFunctionList()) {
           if (function.isDeclaration()) {
             continue;
@@ -304,7 +210,14 @@ int main(int argc, const char **argv) {
         std::unordered_set<llvm::Instruction *> instructionsToRemoveUnique;
         std::unordered_map<llvm::LoadInst *, uint32_t> loadsToReplaceToSCindex;
 
-        // Collect the load operations for the specialization constants
+        // Step 2:
+        // Replace uses of the result of volatile loads by constants, like
+        // this:
+        //   Original:
+        //     %590 = load volatile i32, i32* %61, align 4
+        //     %591 = icmp eq i32 %590, 0
+        //   Changed:
+        //     %586 = icmp eq i32 ???, 0
         for (auto &E : allocSCIndices) {
           llvm::AllocaInst *alloca_inst = E.first;
           uint32_t scIndex = E.second;
@@ -333,7 +246,13 @@ int main(int argc, const char **argv) {
           I->replaceAllUsesWith(scConstant);
         }
 
-        // Collect the rest of the instructions to remove
+        // Step 3: 
+        // Remove any other instructions using the slot the load happened
+        // from,
+        //   which includes not only volatile stores but also any other
+        //   instruction the compiler may have added on its own, such as
+        //   'bitcast' and lifetime control calls, as well as any other
+        //   instruction that is invalid now due to the previously removed ones.
         uint32_t k = 0;
         while (k < instructionsToRemove.size()) {
           for (llvm::User *U : instructionsToRemove[k]->users()) {
@@ -396,7 +315,7 @@ int main(int argc, const char **argv) {
         }
       }
 
-      // Write part
+      // Write the container back
       pContainerWriter->AddPart(
           kind, partSize,
           [=, &dxilPartOffset](hlsl::AbstractMemoryStream *s) {
@@ -423,33 +342,11 @@ int main(int argc, const char **argv) {
     IFR(pUtils->CreateBlob((LPBYTE)pOutput.m_pData, OutputSize, DXC_CP_ACP,
                            &pContainerBlob));
 
-    // Patch
-    /*uint64_t abs_sc_sentinel_bit_offset = dxilPartOffset * 8 +
-                                          sizeof(hlsl::DxilProgramHeader) * 8 +
-                                          bitOffsets[3];
-    PatchShader(1, abs_sc_sentinel_bit_offset,
-                (uint8_t *)pContainerBlob->GetBufferPointer());
-
-    abs_sc_sentinel_bit_offset = dxilPartOffset * 8 +
-                                 sizeof(hlsl::DxilProgramHeader) * 8 +
-                                 bitOffsets[1];
-    PatchShader(0, abs_sc_sentinel_bit_offset,
-                (uint8_t *)pContainerBlob->GetBufferPointer());
-
-    abs_sc_sentinel_bit_offset = dxilPartOffset * 8 +
-                                 sizeof(hlsl::DxilProgramHeader) * 8 +
-                                 bitOffsets[2];
-    PatchShader(0, abs_sc_sentinel_bit_offset,
-            (uint8_t *)pContainerBlob->GetBufferPointer());*/
-
     // Sign container
     CComPtr<IDxcValidator> pValidator;
     CComPtr<IDxcOperationResult> pResult;
     DxcDllSupport DxilSupport;
-    HRESULT __hr = DxilSupport.InitializeForDll(kDxilLib, "DxcCreateInstance");
-    if (DXC_FAILED(__hr))
-      throw ::hlsl::Exception(__hr);
-
+    IFT(DxilSupport.InitializeForDll(kDxilLib, "DxcCreateInstance"));
     IFT(DxilSupport.CreateInstance(CLSID_DxcValidator, &pValidator));
     IFT(pValidator->Validate(pContainerBlob, DxcValidatorFlags_InPlaceEdit,
                              &pResult));
@@ -464,26 +361,19 @@ int main(int argc, const char **argv) {
       const char *pStart = (const char *)text->GetBufferPointer();
       std::string msg(pStart);
       IFTMSG(status, msg);
-
-    } 
+    }
     
+    // Write the blob
     if (!OutputFilename.empty()) {
       // Write the signed blob to a file
       WriteBlobToFile(pContainerBlob, StringRefWide(OutputFilename), CP_ACP);
-      printf("Specialized Constants Patching succeeded.");
     }
 
+    // Write the offsets
     if (!OffsetsFilename.empty())
     {
       WriteOffsetJsonFile((dxilPartOffset + sizeof(hlsl::DxilProgramHeader)) * 8, bitOffsets);
     }
-
-    //CComPtr<IDxcCompiler> pCompiler;
-    //IFT(dxcSupport.CreateInstance(CLSID_DxcCompiler, &pCompiler));
-    //CComPtr<IDxcBlobEncoding> pDisassembleBlob;
-    //IFR(pCompiler->Disassemble(pContainerBlob, &pDisassembleBlob));
-    //std::string disassembleString(BlobToUtf8(pDisassembleBlob));
-    //printf("%s", disassembleString.c_str());
 
   } catch (const ::hlsl::Exception &hlslException) {
     try {
@@ -500,21 +390,17 @@ int main(int argc, const char **argv) {
       printf("%s\n", msg);
     } catch (...) {
       printf("%s failed - unable to retrieve error message.\n", pStage);
-      llvm::errs() << "unable to retrieve error message";
     }
-    llvm::errs().flush();
     return 1;
   } catch (std::bad_alloc &) {
     llvm::errs() << "failed - out of memory";
     printf("%s failed - out of memory.\n", pStage);
-    llvm::errs().flush();
     return 1;
   } catch (...) {
-    llvm::errs() << "failed - unknown error";
     printf("%s failed - unknown error.\n", pStage);
-    llvm::errs().flush();
     return 1;
   }
 
+  printf("Specialized Constants Patching succeeded.");
   return 0;
 }
