@@ -394,8 +394,8 @@ private:
           }
 
           WriteConstantCallback(SCVal, SCBitOffset);
-          // O3DE Change End
         }
+        // O3DE Change End
         EmitAbbreviatedField(Op, Vals[RecordIdx]);
         ++RecordIdx;
       }
