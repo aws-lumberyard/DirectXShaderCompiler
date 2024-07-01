@@ -10,6 +10,7 @@
 #include "dxc/Support/Global.h"
 #include "dxc/Support/Unicode.h"
 #include "dxc/Support/WinIncludes.h"
+#include "dxc/Support/WinFunctions.h"
 
 #include "dxc/dxcapi.h"
 #include "dxc/Support/dxcapi.use.h"
